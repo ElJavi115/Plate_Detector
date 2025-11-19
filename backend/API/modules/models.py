@@ -18,6 +18,7 @@ class Auto(Base):
     id = Column(Integer, primary_key=True, index=True)
     marca = Column(String, nullable=False)
     modelo = Column(String, nullable=False)
+    color = Column(String, nullable=False)
     placa = Column(String, nullable=False, unique=True, index=True)
     persona_id = Column(Integer, ForeignKey('personas.id', ondelete = "CASCADE"), nullable=False)
 
