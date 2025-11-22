@@ -131,16 +131,13 @@ def normalizar_placa(texto: str) -> str:
 
 @app.post("/ocr-placa")
 async def ocr_placa(file: UploadFile = File(...)):
-    # 1. Guardar archivo temporalmente
     with NamedTemporaryFile(delete=True, suffix=".jpg") as tmp:
         contenido = await file.read()
         tmp.write(contenido)
         tmp.flush()
 
-        # 2. Ejecutar PaddleOCR sobre el archivo
         result = ocr.ocr(tmp.name, cls=True)
 
-    # 3. Extraer texto
     textos = []
     for line in result:
         for box, (text, score) in line:
@@ -153,7 +150,6 @@ async def ocr_placa(file: UploadFile = File(...)):
     placa_detectada = normalizar_placa(textos[0])
     print("Placa detectada por OCR:", placa_detectada)
 
-    # 4. Buscar en la BD
     db = SessionLocal()
     try:
         consulta = (
