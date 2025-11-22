@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../services/plate_recognition.dart';
 import '../services/api_client.dart';
 import '../models/plate_model.dart';
 import 'user_detail_page.dart';
@@ -68,20 +67,9 @@ class _CameraPageState extends State<CameraPage> {
       final file = await _controller!.takePicture();
       final imageFile = File(file.path);
 
-      // 2. Pipeline: TFLite + OCR
-      final pipeline = PlateRecognitionPipeline.instance;
-      final result = await pipeline.recognizePlateFromImage(imageFile);
-
-      if (result == null) {
-        throw Exception('No se pudo reconocer la placa');
-      }
-
-      final plateText = result.plateText;
-      debugPrint('Placa detectada (OCR): $plateText');
-
-      // 3. Consultar API -> AHORA usa PlateData
+      // 2. Mandar imagen a la API (Python con PaddleOCR)
       final api = ApiClient.instance;
-      final PlateData? placaInfo = await api.datosPorPlaca(plateText);
+      final PlateData? placaInfo = await api.datosPorImagen(imageFile);
 
       setState(() {
         _isProcessing = false;
@@ -91,18 +79,18 @@ class _CameraPageState extends State<CameraPage> {
 
       if (placaInfo == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Placa no registrada: $plateText')),
+          const SnackBar(content: Text('Placa no registrada')),
         );
         return;
       }
 
-      // 4. Navegar a la pantalla de detalles
+      // 3. Navegar a la pantalla de detalles
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => UserDetailPage(
-            placaReconocida: plateText,
-            data: placaInfo, // 👈 YA ES PlateData
+            placaReconocida: placaInfo.autoData.placa, // o la que detecte Python
+            data: placaInfo,
           ),
         ),
       );

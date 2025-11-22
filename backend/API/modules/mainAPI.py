@@ -1,17 +1,33 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from paddleocr import PaddleOCR
+from tempfile import NamedTemporaryFile
+
 from .config import Base, engine, SessionLocal
 from .models import Auto, Persona
 
 app = FastAPI(title="API Placas", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
     cargar_datos_iniciales()
 
+
 def cargar_datos_iniciales():
     db = SessionLocal()
     try:
+        # si ya hay personas, no volvemos a insertar
         if db.query(Persona).first():
             print("Datos ya cargados.")
             return
@@ -73,11 +89,17 @@ def cargar_datos_iniciales():
     finally:
         db.close()
 
+
 @app.get("/autos/placa/{placa}")
-def buscar_datos_por_placa(placa):
+def buscar_datos_por_placa(placa: str):
     db = SessionLocal()
     try:
-        consulta = db.query(Auto).join(Persona).filter(Auto.placa == placa).first()
+        consulta = (
+            db.query(Auto)
+            .join(Persona)
+            .filter(Auto.placa == placa)
+            .first()
+        )
 
         if not consulta:
             raise HTTPException(status_code=404, detail="Placa no registrada")
@@ -93,9 +115,73 @@ def buscar_datos_por_placa(placa):
                 "marca": consulta.marca,
                 "modelo": consulta.modelo,
                 "color": consulta.color,
-            }
+            },
         }
         return respuesta
     finally:
         db.close()
-        
+
+
+def normalizar_placa(texto: str) -> str:
+    texto = texto.upper().strip()
+    texto = texto.replace(" ", "")
+    # texto = texto.replace("-", "")  # descomenta si quieres ignorar guiones
+    return texto
+
+
+@app.post("/ocr-placa")
+async def ocr_placa(file: UploadFile = File(...)):
+    # 1. Guardar archivo temporalmente
+    with NamedTemporaryFile(delete=True, suffix=".jpg") as tmp:
+        contenido = await file.read()
+        tmp.write(contenido)
+        tmp.flush()
+
+        # 2. Ejecutar PaddleOCR sobre el archivo
+        result = ocr.ocr(tmp.name, cls=True)
+
+    # 3. Extraer texto
+    textos = []
+    for line in result:
+        for box, (text, score) in line:
+            if score > 0.5:
+                textos.append(text)
+
+    if not textos:
+        raise HTTPException(status_code=400, detail="No se detectó texto en la imagen")
+
+    placa_detectada = normalizar_placa(textos[0])
+    print("Placa detectada por OCR:", placa_detectada)
+
+    # 4. Buscar en la BD
+    db = SessionLocal()
+    try:
+        consulta = (
+            db.query(Auto)
+            .join(Persona)
+            .filter(Auto.placa == placa_detectada)
+            .first()
+        )
+
+        if not consulta:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Placa {placa_detectada} no registrada",
+            )
+
+        respuesta = {
+            "persona": {
+                "nombre": consulta.persona.nombre,
+                "edad": consulta.persona.edad,
+                "correo": consulta.persona.correo,
+            },
+            "auto": {
+                "placa": consulta.placa,
+                "marca": consulta.marca,
+                "modelo": consulta.modelo,
+                "color": consulta.color,
+            },
+        }
+        return respuesta
+    finally:
+        db.close()

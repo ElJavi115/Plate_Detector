@@ -1,19 +1,11 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 
-import 'services/plate_recognition.dart';
 import 'pages/home_page.dart';
 import 'pages/camera_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  try {
-    await PlateRecognitionPipeline.instance.preload();
-  } catch (e) {
-    // Si falla, no truena la app, solo se inicializará al primer uso.
-    debugPrint('No se pudo precargar el modelo: $e');
-  }
 
   runApp(const MyApp());
 }
