@@ -11,8 +11,6 @@ import logging
 import tempfile
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 app = FastAPI(title="API Placas", version="1.0.0")
 
 app.add_middleware(
@@ -24,7 +22,6 @@ app.add_middleware(
 )
 
 
-# Instancia global de OCR
 ocr: PaddleOCR | None = None
 
 
@@ -34,16 +31,12 @@ def startup():
     Base.metadata.create_all(bind=engine)
     cargar_datos_iniciales()
 
-    logger.info("Inicializando PaddleOCR...")
-    # Config para PaddleOCR v3 (solo reconocimiento, sin doc-unwarping raro)
     ocr = PaddleOCR(
         lang="en",
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
     )
-    logger.info("PaddleOCR inicializado correctamente")
-
 
 def cargar_datos_iniciales():
     db = SessionLocal()
@@ -86,7 +79,7 @@ def cargar_datos_iniciales():
                     "estatus": "Autorizado",
                     "noIncidencias": 0,
                 },
-                "autos": [  # 👈 ahora también lista
+                "autos": [ 
                     {
                         "placa": "NA-86-83",
                         "marca": "Toyota",
@@ -121,7 +114,6 @@ def cargar_datos_iniciales():
             db.commit()
             db.refresh(persona)
 
-            # 👇 AHORA USAMOS "autos"
             for auto_data in item.get("autos", []):
                 auto = Auto(**auto_data, persona_id=persona.id)
                 db.add(auto)
@@ -333,7 +325,6 @@ async def ocr_placa(file: UploadFile = File(...)):
             "match_bd": datos,
         }
     except Exception as e:
-        logger.error(f"Error en /ocr/placa: {e}")
         raise HTTPException(status_code=400, detail=f"Error procesando la imagen: {e}")
 
 
