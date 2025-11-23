@@ -1,10 +1,8 @@
-// lib/services/plate_recognition.dart
 import 'dart:io';
 
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 
-/// Resultado del pipeline de reconocimiento.
 class PlateRecognitionResult {
   final String plateText;
   final double? confidence;
@@ -168,7 +166,7 @@ extension _ReshapeExtension<T> on List<T> {
       );
     }
 
-    dynamic _reshape(List<T> data, List<int> dims) {
+    dynamic reshape(List<T> data, List<int> dims) {
       if (dims.length == 1) return data;
       final size = dims.first;
       final rest = dims.sublist(1);
@@ -178,11 +176,11 @@ extension _ReshapeExtension<T> on List<T> {
       for (int i = 0; i < size; i++) {
         final start = i * chunkSize;
         final end = start + chunkSize;
-        result.add(_reshape(data.sublist(start, end), rest));
+        result.add(reshape(data.sublist(start, end), rest));
       }
       return result;
     }
 
-    return _reshape(this, dims) as List;
+    return reshape(this, dims) as List;
   }
 }

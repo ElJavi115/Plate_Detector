@@ -1,12 +1,8 @@
-// lib/pages/camera_page.dart
 import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-
 import '../services/api_client.dart';
-import '../models/plate_model.dart';
-import '../services/plate_recognition.dart';
 import 'user_detail_page.dart';
 
 class CameraPage extends StatefulWidget {

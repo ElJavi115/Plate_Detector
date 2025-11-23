@@ -1,4 +1,3 @@
-// lib/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:plate_detector/pages/user_section_page.dart';
 
@@ -24,11 +23,11 @@ class _HomePageState extends State<HomePage> {
   Widget _buildBody() {
     switch (_selectedIndex) {
       case 0:
-        return const UsuariosSection();   // lista + buscador de usuarios
+        return const UsuariosSection();   
       case 1:
-        return Text('Autos Section');    // lista + buscador de autos/incidencias
+        return Text('Autos Section');    
       case 2:
-        return const CameraPage();        // tu pantalla de cámara actual
+        return const CameraPage();
       default:
         return const Center(
           child: Text('Selecciona una opción en el menú de abajo'),

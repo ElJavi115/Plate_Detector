@@ -123,11 +123,9 @@ class _UsuariosSectionState extends State<UsuariosSection> {
                           onTap: () async {
                             try {
                               final api = ApiClient.instance;
-                              // 👇 Pedimos la misma "data" que usa la pantalla de detalle
                               final plateData = await api
                                   .obtenerDetallePersona(user.id);
 
-                              // Podemos usar la placa del auto como "placaReconocida"
                               final placa = plateData.autoData.placa;
 
                               if (!mounted) return;
