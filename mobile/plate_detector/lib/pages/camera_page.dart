@@ -61,16 +61,13 @@ class _CameraPageState extends State<CameraPage> {
     try {
       await _initializeControllerFuture!;
 
-      // 1. Tomar foto
       final xfile = await _controller!.takePicture();
       final imageFile = File(xfile.path);
 
-      // Guardar imagen para “congelar” la vista mientras procesamos
       setState(() {
         _capturedImage = imageFile;
       });
 
-      // 2. Enviar la imagen al backend para OCR
       final api = ApiClient.instance;
       final ocrResult = await api.ocrPlacaFromImage(imageFile);
 
@@ -93,7 +90,6 @@ class _CameraPageState extends State<CameraPage> {
       }
 
       if (matchBd == null) {
-        // Placa leída pero no registrada en BD
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Placa leída: $placaReconocida (no registrada)'),
@@ -128,7 +124,6 @@ class _CameraPageState extends State<CameraPage> {
   }
 
   Widget _buildPreview() {
-    // Si ya tomamos foto y estamos procesando, mostramos la imagen capturada
     if (_capturedImage != null && _isProcessing) {
       return SizedBox.expand(
         child: FittedBox(fit: BoxFit.cover, child: Image.file(_capturedImage!)),
@@ -158,10 +153,8 @@ class _CameraPageState extends State<CameraPage> {
       appBar: AppBar(title: const Text("Cámara / Detector")),
       body: Stack(
         children: [
-          // Vista principal: cámara o imagen congelada
           _buildPreview(),
 
-          // Cuadro guía (opcional)
           Align(
             alignment: Alignment.center,
             child: Container(
@@ -177,7 +170,6 @@ class _CameraPageState extends State<CameraPage> {
             ),
           ),
 
-          // Overlay de “procesando...”
           if (_isProcessing)
             Container(
               color: Colors.black.withOpacity(0.4),
@@ -195,8 +187,6 @@ class _CameraPageState extends State<CameraPage> {
                 ),
               ),
             ),
-
-          // Botón inferior
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(

@@ -43,10 +43,8 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
       ),
 
-      // Ahora el body cambia según _selectedIndex
       body: _buildBody(),
 
-      // El FAB usa el índice para decidir qué acción mostrar
       floatingActionButton: HomeActionFab(selectedIndex: _selectedIndex),
 
       bottomNavigationBar: BottomNavigationBar(

@@ -10,7 +10,7 @@ class ApiClient {
   ApiClient._internal();
   static final ApiClient instance = ApiClient._internal();
 
-  final String _baseUrl = 'https://placas-api-k5gv.onrender.com/';
+  final String _baseUrl = 'https://placas-api-k5gv.onrender.com';
 
   Future<OcrResult> ocrPlacaFromImage(File imageFile) async {
     final uri = Uri.parse('$_baseUrl/ocr/placa');
