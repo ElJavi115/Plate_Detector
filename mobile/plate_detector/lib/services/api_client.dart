@@ -12,7 +12,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._internal();
 
   //final String _baseUrl = 'https://placas-api-k5gv.onrender.com';
-  final String _baseUrl = 'http://192.168.1.15:8000';
+  final String _baseUrl = 'http://{{TU IP}}:8000';
 
   Future<OcrResult> ocrPlacaFromImage(File imageFile) async {
     final uri = Uri.parse('$_baseUrl/ocr/placa');
