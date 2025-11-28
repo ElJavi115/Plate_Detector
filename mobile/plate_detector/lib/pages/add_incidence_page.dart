@@ -365,11 +365,6 @@ Future<void> _obtenerUbicacion() async {
                 decoration: InputDecoration(
                   labelText: 'Placa',
                   border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: _buscarPorPlaca,
-                    tooltip: 'Buscar',
-                  ),
                 ),
                 textCapitalization: TextCapitalization.characters,
                 validator: (value) {
@@ -380,7 +375,25 @@ Future<void> _obtenerUbicacion() async {
                 },
               ),
               const SizedBox(height: 16),
-              
+
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _buscarPorPlaca,
+                  icon: const Icon(Icons.search),
+                  label: const Text(
+                    'Buscar por Placa',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
               TextFormField(
                 controller: _marcaCtrl,
                 decoration: const InputDecoration(
