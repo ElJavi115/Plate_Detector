@@ -6,9 +6,9 @@ import 'package:plate_detector/pages/add_vehicle_page.dart';
 import 'package:plate_detector/services/api_client.dart';
 
 class UserDetailPage extends StatefulWidget {
-  final String placaReconocida;  
-  final PlateData data;        
-  final bool mostrarCoincidencia; 
+  final String placaReconocida;
+  final PlateData data;
+  final bool mostrarCoincidencia;
   const UserDetailPage({
     super.key,
     required this.placaReconocida,
@@ -22,14 +22,14 @@ class UserDetailPage extends StatefulWidget {
 
 class _UserDetailPageState extends State<UserDetailPage> {
   late final Persona usuario;
-  Auto? autoPrincipal;                     
+  Auto? autoPrincipal;
   late Future<List<Auto>> _autosFuture;
 
   @override
   void initState() {
     super.initState();
     usuario = widget.data.userData;
-    autoPrincipal = widget.data.autoData;  
+    autoPrincipal = widget.data.autoData;
     _autosFuture = ApiClient.instance.obtenerAutosPorPersona(usuario.id);
   }
 
@@ -38,11 +38,15 @@ class _UserDetailPageState extends State<UserDetailPage> {
     final placaReconocida = widget.placaReconocida;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalles de la placa / usuario')),
+      appBar: AppBar(
+        title: widget.mostrarCoincidencia
+            ? const Text('Detalles de la placa / usuario')
+            : const Text('Detalles del usuario'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Info de placa detectada 
+          // Info de placa detectada
           if (widget.mostrarCoincidencia && autoPrincipal != null)
             Card(
               child: Padding(
@@ -133,7 +137,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 itemCount: autos.length,
                 itemBuilder: (context, index) {
                   final a = autos[index];
-                  final esDetectada = widget.mostrarCoincidencia &&
+                  final esDetectada =
+                      widget.mostrarCoincidencia &&
                       normalizarPlaca(a.placa) ==
                           normalizarPlaca(placaReconocida);
 
@@ -154,57 +159,61 @@ class _UserDetailPageState extends State<UserDetailPage> {
                             ),
                         ],
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Eliminar auto'),
-                              content: Text(
-                                  '¿Estás seguro de eliminar el auto "${a.placa}"? Esta acción no se puede deshacer.'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).pop(false),
-                                  child: const Text('Cancelar'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).pop(true),
-                                  child: const Text('Eliminar'),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (confirm == true) {
-                            try {
-                              await ApiClient.instance.eliminarAuto(a.id);
-                              setState(() {
-                                _autosFuture = ApiClient
-                                    .instance
-                                    .obtenerAutosPorPersona(usuario.id);
-                              });
-                              if (!mounted) return;
-                              // ignore: use_build_context_synchronously
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content:
-                                        Text('Auto "${a.placa}" eliminado')),
-                              );
-                            } catch (e) {
-                              if (!mounted) return;
-                              // ignore: use_build_context_synchronously
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
+                      trailing: widget.mostrarCoincidencia
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Eliminar auto'),
                                     content: Text(
-                                        'Error al eliminar auto: $e')),
-                              );
-                            }
-                          }
-                        },
-                      ),
+                                      '¿Estás seguro de eliminar el auto "${a.placa}"? Esta acción no se puede deshacer.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
+                                        child: const Text('Cancelar'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
+                                        child: const Text('Eliminar'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirm == true) {
+                                  try {
+                                    await ApiClient.instance.eliminarAuto(a.id);
+                                    setState(() {
+                                      _autosFuture = ApiClient.instance
+                                          .obtenerAutosPorPersona(usuario.id);
+                                    });
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Auto "${a.placa}" eliminado',
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Error al eliminar auto: $e',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
                     ),
                   );
                 },
@@ -226,16 +235,15 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 final creado = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AddVehiclePage(
-                      personaId: usuario.id,
-                    ),
+                    builder: (_) => AddVehiclePage(personaId: usuario.id),
                   ),
                 );
 
                 if (creado == true) {
                   setState(() {
-                    _autosFuture =
-                        ApiClient.instance.obtenerAutosPorPersona(usuario.id);
+                    _autosFuture = ApiClient.instance.obtenerAutosPorPersona(
+                      usuario.id,
+                    );
                   });
                 }
               },

@@ -71,10 +71,9 @@ class _SplashPageState extends State<SplashPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.directions_car,
-              size: 100,
-              color: Theme.of(context).primaryColor,
+            Image(
+              image: AssetImage('assets/images/VAFE.png'),
+              height: 120,
             ),
             const SizedBox(height: 24),
             const CircularProgressIndicator(),
