@@ -52,7 +52,11 @@ class _IncidenciaDetailPageState extends State<IncidenciaDetailPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('$nuevoEstatus incidencia'),
+        title: Text(
+          nuevoEstatus == 'Aprobada'
+            ? 'Aprobar incidencia'
+            : 'Rechazar incidencia',
+        ),
         content: Text(
           '¿Estás seguro de marcar esta incidencia como "$nuevoEstatus"?',
         ),
@@ -67,6 +71,7 @@ class _IncidenciaDetailPageState extends State<IncidenciaDetailPage> {
               backgroundColor: nuevoEstatus == 'Aprobada'
                   ? Colors.green
                   : Colors.red,
+              foregroundColor: Colors.white,
             ),
             child: Text(nuevoEstatus),
           ),
@@ -114,7 +119,11 @@ class _IncidenciaDetailPageState extends State<IncidenciaDetailPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            
             child: const Text('Eliminar'),
           ),
         ],
