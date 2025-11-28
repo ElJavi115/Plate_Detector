@@ -7,3 +7,5 @@ pydantic
 pydantic[email]
 paddleocr
 opencv-python
+sendgrid
+python-dotenv

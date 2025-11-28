@@ -39,7 +39,7 @@ class PlateRecognitionPipeline {
 
   List _preprocessImage(File imageFile) {
     if (_inputShape == null) {
-      throw StateError('Interpreter no inicializado');
+      throw StateError('Interprete no inicializado');
     }
 
     final h = _inputShape![1];

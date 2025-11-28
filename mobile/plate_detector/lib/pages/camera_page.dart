@@ -1,12 +1,16 @@
 import 'dart:io';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import 'user_detail_page.dart';
 
 class CameraPage extends StatefulWidget {
-  const CameraPage({super.key});
+  final bool paraIncidencia;
+  
+  const CameraPage({
+    super.key,
+    this.paraIncidencia = false,
+  });
 
   @override
   State<CameraPage> createState() => _CameraPageState();
@@ -86,6 +90,18 @@ class _CameraPageState extends State<CameraPage> {
             content: Text('No se pudo decodificar una placa válida'),
           ),
         );
+        setState(() {
+          _capturedImage = null;
+        });
+        return;
+      }
+
+      if (widget.paraIncidencia) {
+        Navigator.pop(context, {
+          'imagen': imageFile,
+          'placa': placaReconocida,
+          'datos': matchBd,
+        });
         return;
       }
 
@@ -95,15 +111,20 @@ class _CameraPageState extends State<CameraPage> {
             content: Text('Placa leída: $placaReconocida (no registrada)'),
           ),
         );
+        setState(() {
+          _capturedImage = null;
+        });
         return;
       }
-
 
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              UserDetailPage(placaReconocida: placaReconocida, data: matchBd, mostrarCoincidencia: true)
+          builder: (_) => UserDetailPage(
+            placaReconocida: placaReconocida,
+            data: matchBd,
+            mostrarCoincidencia: true,
+          ),
         ),
       );
 
@@ -115,6 +136,7 @@ class _CameraPageState extends State<CameraPage> {
       debugPrint(st.toString());
       setState(() {
         _isProcessing = false;
+        _capturedImage = null;
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +148,10 @@ class _CameraPageState extends State<CameraPage> {
   Widget _buildPreview() {
     if (_capturedImage != null && _isProcessing) {
       return SizedBox.expand(
-        child: FittedBox(fit: BoxFit.cover, child: Image.file(_capturedImage!)),
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: Image.file(_capturedImage!),
+        ),
       );
     }
 
@@ -150,7 +175,11 @@ class _CameraPageState extends State<CameraPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Cámara / Detector")),
+      appBar: AppBar(
+        title: Text(
+          widget.paraIncidencia ? 'Escanear Placa' : 'Detector de Placas',
+        ),
+      ),
       body: Stack(
         children: [
           _buildPreview(),

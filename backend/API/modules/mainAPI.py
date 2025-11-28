@@ -1,14 +1,18 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import joinedload
 
 from .config import Base, engine, SessionLocal
-from .models import Auto, Incidencia, Persona
+from .models import Auto, Incidencia, Perfil, Persona
 from .schemas import AutoCreate, AutoRead, IncidenciaCreate, IncidenciaRead, PersonaCreate, PersonaRead
+from .emailService import enviar_correo_persona_afectada, enviar_correo_reportante, enviar_correo_incidencia_rechazada
 
 from paddleocr import PaddleOCR
+import os
 import numpy as np
 import cv2
 import tempfile
+import json
 from pathlib import Path
 
 app = FastAPI(title="API Placas", version="1.0.0")
@@ -21,7 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 ocr: PaddleOCR | None = None
 
 
@@ -29,6 +32,7 @@ ocr: PaddleOCR | None = None
 def startup():
     global ocr
     Base.metadata.create_all(bind=engine)
+    cargar_perfiles_iniciales()
     cargar_datos_iniciales()
 
     ocr = PaddleOCR(
@@ -37,6 +41,29 @@ def startup():
         use_doc_unwarping=False,
         use_textline_orientation=False,
     )
+
+
+def cargar_perfiles_iniciales():
+    db = SessionLocal()
+    try:
+        if db.query(Perfil).first():
+            print("Perfiles ya cargados.")
+            return
+        
+        perfil_usuario = Perfil(
+            nombre="Usuario", 
+            descripcion="Usuario normal con acceso limitado")
+        perfil_admin = Perfil(
+            nombre="Administrador", 
+            descripcion="Usuario con acceso completo")
+            
+        db.add(perfil_usuario)
+        db.add(perfil_admin)
+        db.commit()
+        print("Perfiles iniciales cargados exitosamente.")
+    finally:
+        db.close()
+
 
 def cargar_datos_iniciales():
     db = SessionLocal()
@@ -48,16 +75,17 @@ def cargar_datos_iniciales():
         datos = [
             {
                 "persona": {
-                    "nombre": "Candelario Javier Uribe Corrales",
-                    "edad": 54,
-                    "numeroControl": "123456",
-                    "correo": "javier@example.com",
+                    "nombre": "Javier Uribe Armenta",
+                    "edad": 22,
+                    "numeroControl": "21170497",
+                    "correo": "javier.ua01@gmail.com",
                     "estatus": "Autorizado",
                     "noIncidencias": 0,
+                    "perfil_id": 2
                 },
                 "autos": [
                     {
-                        "placa": "VKT-014-B",
+                        "placa": "60-UW-5F",
                         "marca": "Chevrolet",
                         "modelo": "Spark",
                         "color": "Plateado",
@@ -78,6 +106,7 @@ def cargar_datos_iniciales():
                     "correo": "ana@example.com",
                     "estatus": "Autorizado",
                     "noIncidencias": 0,
+                    "perfil_id": 1
                 },
                 "autos": [ 
                     {
@@ -96,6 +125,7 @@ def cargar_datos_iniciales():
                     "correo": "carlos@example.com",
                     "estatus": "Autorizado",
                     "noIncidencias": 0,
+                    "perfil_id": 1
                 },
                 "autos": [
                     {
@@ -123,11 +153,12 @@ def cargar_datos_iniciales():
         db.close()
 
 
+# ========== Helpers ==========
+
 def normalizar_placa(texto: str) -> str:
     texto = texto.upper().strip()
     texto = texto.replace(" ", "")
     return texto
-
 
 def buscar_en_bd_por_placa_norm(placa_norm: str):
     db = SessionLocal()
@@ -159,93 +190,6 @@ def buscar_en_bd_por_placa_norm(placa_norm: str):
     finally:
         db.close()
 
-        
-@app.get("/personas/{persona_id}/autos")
-def listar_autos_de_persona(persona_id: int):
-    db = SessionLocal()
-    try:
-        persona = db.query(Persona).filter(Persona.id == persona_id).first()
-        if not persona:
-            raise HTTPException(status_code=404, detail="Persona no encontrada")
-
-        autos = (
-            db.query(Auto)
-            .filter(Auto.persona_id == persona.id)
-            .all()
-        )
-
-        return [
-            {
-                "id": a.id,
-                "placa": a.placa,
-                "marca": a.marca,
-                "modelo": a.modelo,
-                "color": a.color,
-            }
-            for a in autos
-        ]
-    finally:
-        db.close()
-       
-@app.post("/personas/add", response_model=PersonaRead, status_code=201)
-def añadir_persona(persona: PersonaCreate):
-    db = SessionLocal()
-    try:
-      nueva_persona = Persona(
-          nombre=persona.nombre,
-          edad=persona.edad,
-          numeroControl=persona.numeroControl,
-          correo=persona.correo,
-      )
-      db.add(nueva_persona)
-      db.commit()
-      db.refresh(nueva_persona)
-      return nueva_persona  
-    finally:
-      db.close()
-
-@app.post("/personas/{persona_id}/autos",response_model=AutoRead,status_code=201)
-def crear_auto_para_persona(persona_id: int, auto: AutoCreate):
-    db = SessionLocal()
-    try:
-        persona = db.query(Persona).filter(Persona.id == persona_id).first()
-        if not persona:
-            raise HTTPException(status_code=404, detail="Persona no encontrada")
-
-        nuevo_auto = Auto(
-            placa=auto.placa,
-            marca=auto.marca,
-            modelo=auto.modelo,
-            color=auto.color,
-            persona_id=persona.id,
-        )
-
-        db.add(nuevo_auto)
-        db.commit()
-        db.refresh(nuevo_auto)
-
-        return AutoRead(
-            id=nuevo_auto.id,
-            placa=nuevo_auto.placa,
-            marca=nuevo_auto.marca,
-            modelo=nuevo_auto.modelo,
-            color=nuevo_auto.color,
-            personaId=nuevo_auto.persona_id,
-        )
-
-    finally:
-        db.close()
-
-@app.get("/autos/placa/{placa}")
-def buscar_datos_por_placa(placa: str):
-    placa_norm = normalizar_placa(placa)
-    datos = buscar_en_bd_por_placa_norm(placa_norm)
-
-    if not datos:
-        raise HTTPException(status_code=404, detail="Placa no registrada")
-
-    return datos
-
 
 def respuesta_persona_auto(persona: Persona, auto: Auto | None):
     persona_dict = {
@@ -274,28 +218,59 @@ def respuesta_persona_auto(persona: Persona, auto: Auto | None):
     }
 
 
-@app.get("/personas/{persona_id}/detalle")
-def obtener_detalle_persona(persona_id: int):
-    db = SessionLocal()
-    try:
-        persona = db.query(Persona).filter(Persona.id == persona_id).first()
-        if not persona:
-            raise HTTPException(status_code=404, detail="Persona no encontrada")
-
-        auto = db.query(Auto).filter(Auto.persona_id == persona.id).first()
-
-        return respuesta_persona_auto(persona, auto)
-
-    finally:
-        db.close()
+def respuesta_incidencia(incidencia: Incidencia):
+    incidencia_dict = {
+        "id": incidencia.id,
+        "descripcion": incidencia.descripcion,
+        "fecha": incidencia.fecha,
+        "hora": incidencia.hora or "",
+        "imagenes": json.loads(incidencia.imagenes) if incidencia.imagenes else [],
+        "estatus": incidencia.estatus,
+        "latitud": incidencia.latitud or "0", 
+        "longitud": incidencia.longitud or "0"  
+    }
+    
+    persona_afectada_dict = None 
+    if incidencia.persona_afectada is not None:
+        persona_afectada_dict = {
+            "id": incidencia.persona_afectada.id,
+            "nombre": incidencia.persona_afectada.nombre,
+            "edad": incidencia.persona_afectada.edad,
+            "numeroControl": incidencia.persona_afectada.numeroControl,
+            "correo": incidencia.persona_afectada.correo,
+            "estatus": incidencia.persona_afectada.estatus,
+            "noIncidencias": incidencia.persona_afectada.noIncidencias,
+        }
+    
+    reportante_dict = None
+    if incidencia.reportante is not None:
+        reportante_dict = {
+            "id": incidencia.reportante.id,
+            "nombre": incidencia.reportante.nombre,
+            "numeroControl": incidencia.reportante.numeroControl,
+            "correo": incidencia.reportante.correo,
+        }
+    
+    auto_dict = None
+    if incidencia.auto is not None:
+        auto_dict = {
+            "id": incidencia.auto.id,
+            "placa": incidencia.auto.placa,
+            "marca": incidencia.auto.marca,
+            "modelo": incidencia.auto.modelo,
+            "color": incidencia.auto.color,
+        }
+    
+    return {
+        "incidencia": incidencia_dict,
+        "persona_afectada": persona_afectada_dict,
+        "reportante": reportante_dict,
+        "auto": auto_dict,
+    }
 
 
 @app.post("/ocr/placa")
 async def ocr_placa(file: UploadFile = File(...)):
-    """
-    Recibe una imagen, extrae texto con PaddleOCR, normaliza la placa
-    y busca en la BD.
-    """
     global ocr
     if ocr is None:
         raise HTTPException(status_code=500, detail="OCR no inicializado")
@@ -374,62 +349,8 @@ async def ocr_placa(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error procesando la imagen: {e}")
 
-@app.delete("/personas/{persona_id}")
-def eliminar_persona(persona_id: int):
-    db = SessionLocal()
-    try:
-        persona = db.query(Persona).filter(Persona.id == persona_id).first()
-        if not persona:
-            raise HTTPException(status_code=404, detail="Persona no encontrada")
-        db.delete(persona)
-        db.commit()
-        return {"detail": "Persona eliminada exitosamente"}
-    finally:
-        db.close()
 
-@app.delete("/autos/{auto_id}")
-def eliminar_auto(auto_id: int):
-    db = SessionLocal()
-    try:
-        auto = db.query(Auto).filter(Auto.id == auto_id).first()
-        if not auto:
-            raise HTTPException(status_code=404, detail="Auto no encontrado")
-        db.delete(auto)
-        db.commit()
-        return {"detail": "Auto eliminado exitosamente"}
-    finally:
-        db.close()
-
-@app.post("incidencias/add")
-def añadir_incidencia(incidencia: IncidenciaCreate):
-    db = SessionLocal()
-    try:
-        nueva_incidencia = Incidencia(
-            descripcion=incidencia.descripcion,
-            fecha=incidencia.fecha,
-            imagenes=incidencia.imagenes,
-            persona_id=incidencia.personaId,
-            auto_id=incidencia.autoId,
-        )
-        db.add(nueva_incidencia)
-        db.commit()
-        db.refresh(nueva_incidencia)
-        return nueva_incidencia
-    finally:
-        db.close()
-
-@app.delete("/incidencias/{incidencia_id}")
-def eliminar_incidencia(incidencia_id: int):
-    db = SessionLocal()
-    try:
-        incidencia = db.query(Incidencia).filter(Incidencia.id == incidencia_id).first()
-        if not incidencia:
-            raise HTTPException(status_code=404, detail="Incidencia no encontrada")
-        db.delete(incidencia)
-        db.commit()
-        return {"detail": "Incidencia eliminada exitosamente"}
-    finally:
-        db.close()
+# ========== Rutas Persona ==========
 
 @app.get("/personas")
 def listar_personas():
@@ -452,6 +373,129 @@ def listar_personas():
         db.close()
 
 
+@app.get("/personas/{persona_id}/autos")
+def listar_autos_de_persona(persona_id: int):
+    db = SessionLocal()
+    try:
+        persona = db.query(Persona).filter(Persona.id == persona_id).first()
+        if not persona:
+            raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+        autos = (
+            db.query(Auto)
+            .filter(Auto.persona_id == persona.id)
+            .all()
+        )
+
+        return [
+            {
+                "id": a.id,
+                "placa": a.placa,
+                "marca": a.marca,
+                "modelo": a.modelo,
+                "color": a.color,
+            }
+            for a in autos
+        ]
+    finally:
+        db.close()
+
+
+@app.post("/personas/agregar", response_model=PersonaRead, status_code=201)
+def añadir_persona(persona: PersonaCreate):
+    db = SessionLocal()
+    try:
+        nueva_persona = Persona(
+            nombre=persona.nombre,
+            edad=persona.edad,
+            numeroControl=persona.numeroControl,
+            correo=persona.correo,
+        )
+        db.add(nueva_persona)
+        db.commit()
+        db.refresh(nueva_persona)
+        return nueva_persona  
+    finally:
+        db.close()
+
+
+@app.post("/personas/{persona_id}/autos", response_model=AutoRead, status_code=201)
+def crear_auto_para_persona(persona_id: int, auto: AutoCreate):
+    db = SessionLocal()
+    try:
+        persona = db.query(Persona).filter(Persona.id == persona_id).first()
+        if not persona:
+            raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+        nuevo_auto = Auto(
+            placa=auto.placa,
+            marca=auto.marca,
+            modelo=auto.modelo,
+            color=auto.color,
+            persona_id=persona.id,
+        )
+
+        db.add(nuevo_auto)
+        db.commit()
+        db.refresh(nuevo_auto)
+
+        return AutoRead(
+            id=nuevo_auto.id,
+            placa=nuevo_auto.placa,
+            marca=nuevo_auto.marca,
+            modelo=nuevo_auto.modelo,
+            color=nuevo_auto.color,
+            personaId=nuevo_auto.persona_id,
+        )
+
+    finally:
+        db.close()
+
+
+@app.delete("/personas/{persona_id}")
+def eliminar_persona(persona_id: int):
+    db = SessionLocal()
+    try:
+        persona = db.query(Persona).filter(Persona.id == persona_id).first()
+        if not persona:
+            raise HTTPException(status_code=404, detail="Persona no encontrada")
+        db.delete(persona)
+        db.commit()
+        return {"detail": "Persona eliminada exitosamente"}
+    finally:
+        db.close()
+
+
+@app.get("/personas/{persona_id}/detalle")
+def obtener_detalle_persona(persona_id: int):
+    db = SessionLocal()
+    try:
+        persona = db.query(Persona).filter(Persona.id == persona_id).first()
+        if not persona:
+            raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+        auto = db.query(Auto).filter(Auto.persona_id == persona.id).first()
+
+        return respuesta_persona_auto(persona, auto)
+
+    finally:
+        db.close()
+
+@app.get("/personas/{numero_control}", response_model=PersonaRead)
+def obtener_persona_por_numero_control(numero_control: str):
+    db = SessionLocal()
+    try:
+        persona = db.query(Persona).filter(Persona.numeroControl == numero_control).first()
+        if persona is None:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        return persona
+    finally:
+        db.close()
+
+
+
+# ========== Rutas Auto ==========
+
 @app.get("/autos")
 def listar_autos():
     db = SessionLocal()
@@ -471,79 +515,305 @@ def listar_autos():
     finally:
         db.close()
 
-@app.get("/incidencias")
-def listar_incidencias():
+
+@app.get("/autos/placa/{placa}")
+def buscar_datos_por_placa(placa: str):
+    placa_norm = normalizar_placa(placa)
+    datos = buscar_en_bd_por_placa_norm(placa_norm)
+
+    if not datos:
+        raise HTTPException(status_code=404, detail="Placa no registrada")
+
+    return datos
+
+
+@app.delete("/autos/{auto_id}")
+def eliminar_auto(auto_id: int):
     db = SessionLocal()
     try:
-        incidencias = db.query(Incidencia).all()
+        auto = db.query(Auto).filter(Auto.id == auto_id).first()
+        if not auto:
+            raise HTTPException(status_code=404, detail="Auto no encontrado")
+        db.delete(auto)
+        db.commit()
+        return {"detail": "Auto eliminado exitosamente"}
+    finally:
+        db.close()
+
+
+# ========== Rutas Incidencia ==========
+
+
+@app.get("/incidencias")
+def listar_incidencias(personaId: int):
+    db = SessionLocal()
+    try:
+        persona = db.query(Persona).filter(Persona.id == personaId).first()
+        if not persona:
+            raise HTTPException(status_code=404, detail="Persona no encontrada")
+        
+        base_query = db.query(Incidencia).options(
+            joinedload(Incidencia.persona_afectada),
+            joinedload(Incidencia.reportante),
+            joinedload(Incidencia.auto)
+        )
+        
+        if persona.perfil.nombre == 'Usuario':
+            incidencias = base_query.filter(Incidencia.reportante_id == personaId).all()
+        else:
+            incidencias = base_query.all()
+
         return [
             {
-                "id": i.id,
-                "descripcion": i.descripcion,
-                "fecha": i.fecha,
-                "imagenes": i.imagenes,
-                "personaId": i.persona_id,
-                "autoId": i.auto_id,
+                "id": inc.id,
+                "descripcion": inc.descripcion or "",  
+                "fecha": inc.fecha or "", 
+                "hora": inc.hora or "",
+                "imagenes": json.loads(inc.imagenes) if inc.imagenes else [],
+                "estatus": inc.estatus or "Pendiente",  
+                "latitud": inc.latitud or "0",  
+                "longitud": inc.longitud or "0",  
+                "persona_afectada": {
+                    "id": inc.persona_afectada.id,
+                    "nombre": inc.persona_afectada.nombre or "",  
+                    "numeroControl": inc.persona_afectada.numeroControl or "",  
+                    "correo": inc.persona_afectada.correo or "",  
+                    "estatus": inc.persona_afectada.estatus or "Autorizado",  
+                    "noIncidencias": inc.persona_afectada.noIncidencias or 0  
+                } if inc.persona_afectada else None,
+                "reportante": {
+                    "id": inc.reportante.id,
+                    "nombre": inc.reportante.nombre or "", 
+                    "numeroControl": inc.reportante.numeroControl or "",  
+                    "correo": inc.reportante.correo or "" 
+                } if inc.reportante else None,
+                "auto": {
+                    "id": inc.auto.id,
+                    "placa": inc.auto.placa or "",  
+                    "marca": inc.auto.marca or "",  
+                    "modelo": inc.auto.modelo or "",  
+                    "color": inc.auto.color or ""
+                } if inc.auto else None
             }
-            for i in incidencias
+            for inc in incidencias
         ]
     finally:
         db.close()
 
-@app.get("/personas/debug")
-def debug_todas_las_personas():
+
+@app.post("/incidencias/agregar", status_code=201)
+def añadir_incidencia(incidencia: IncidenciaCreate):
     db = SessionLocal()
     try:
-        personas = db.query(Persona).all()
-        resultado = []
-        for persona in personas:
-            autos = [
-                {
-                    "placa": auto.placa,
-                    "marca": auto.marca,
-                    "modelo": auto.modelo,
-                    "color": auto.color,
-                }
-                for auto in persona.autos
-            ]
-            resultado.append(
-                {
-                    "nombre": persona.nombre,
-                    "edad": persona.edad,
-                    "numeroControl": persona.numeroControl,
-                    "correo": persona.correo,
-                    "estatus": persona.estatus,
-                    "noIncidencias": persona.noIncidencias,
-                    "autos": autos,
-                }
-            )
-        return resultado
+        persona_afectada = db.query(Persona).filter(Persona.id == incidencia.personaId).first()
+        if not persona_afectada:
+            raise HTTPException(status_code=404, detail="Persona afectada no encontrada")
+        
+        reportante = db.query(Persona).filter(Persona.id == incidencia.reportanteId).first()
+        if not reportante:
+            raise HTTPException(status_code=404, detail="Reportante no encontrado")
+
+        auto = db.query(Auto).filter(Auto.id == incidencia.autoId).first()
+        if not auto:
+            raise HTTPException(status_code=404, detail="Auto no encontrado")
+        
+        imagenes_str = json.dumps(incidencia.imagenes) if incidencia.imagenes else "[]"
+        
+        latitud = incidencia.latitud if incidencia.latitud is not None else "0"
+        longitud = incidencia.longitud if incidencia.longitud is not None else "0"
+        hora = incidencia.hora if incidencia.hora is not None else ""
+        nueva_incidencia = Incidencia(
+            descripcion=incidencia.descripcion,
+            fecha=incidencia.fecha,
+            hora=hora,
+            imagenes=imagenes_str,
+            estatus=incidencia.estatus or "Pendiente",
+            latitud=latitud,  
+            longitud=longitud, 
+            persona_id=incidencia.personaId,
+            reportante_id=incidencia.reportanteId,
+            auto_id=incidencia.autoId,
+        )
+        db.add(nueva_incidencia)
+        db.commit()
+        db.refresh(nueva_incidencia)
+        
+        return IncidenciaRead(
+            id=nueva_incidencia.id,
+            descripcion=nueva_incidencia.descripcion,
+            fecha=nueva_incidencia.fecha,
+            hora=nueva_incidencia.hora,
+            imagenes=json.loads(nueva_incidencia.imagenes) if nueva_incidencia.imagenes else [],
+            estatus=nueva_incidencia.estatus,
+            latitud=nueva_incidencia.latitud,
+            longitud=nueva_incidencia.longitud,
+            personaId=nueva_incidencia.persona_id,
+            reportanteId=nueva_incidencia.reportante_id,
+            autoId=nueva_incidencia.auto_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creando incidencia: {str(e)}")
     finally:
         db.close()
 
 
-@app.get("/autos/debug")
-def debug_todos_los_autos():
+@app.delete("/incidencias/{incidencia_id}")
+def eliminar_incidencia(incidencia_id: int):
     db = SessionLocal()
     try:
-        autos = db.query(Auto).all()
-        resultado = []
-        for auto in autos:
-            resultado.append(
-                {
-                    "placa": auto.placa,
-                    "marca": auto.marca,
-                    "modelo": auto.modelo,
-                    "color": auto.color,
-                    "persona": {
-                        "nombre": auto.persona.nombre,
-                        "edad": auto.persona.edad,
-                        "correo": auto.persona.correo,
-                        "estatus": auto.persona.estatus,
-                        "noIncidencias": auto.persona.noIncidencias,
-                    },
+        incidencia = db.query(Incidencia).filter(Incidencia.id == incidencia_id).first()
+        if not incidencia:
+            raise HTTPException(status_code=404, detail="Incidencia no encontrada")
+        db.delete(incidencia)
+        db.commit()
+        return {"detail": "Incidencia eliminada exitosamente"}
+    finally:
+        db.close()
+
+
+@app.get("/incidencias/{incidencia_id}/detalle")
+def obtener_detalle_incidencia(incidencia_id: int):
+    db = SessionLocal()
+    try:
+        incidencia = db.query(Incidencia).options(
+            joinedload(Incidencia.persona_afectada),
+            joinedload(Incidencia.reportante),
+            joinedload(Incidencia.auto)
+        ).filter(Incidencia.id == incidencia_id).first()
+        
+        if not incidencia:
+            raise HTTPException(status_code=404, detail="Incidencia no encontrada")
+
+        return respuesta_incidencia(incidencia)
+
+    finally:
+        db.close()
+
+
+@app.patch("/incidencias/{incidencia_id}/estatus")
+def actualizar_estatus_incidencia(incidencia_id: int, estatus: str):
+    db = SessionLocal()
+    try:
+        incidencia = db.query(Incidencia).options(
+            joinedload(Incidencia.persona_afectada),
+            joinedload(Incidencia.reportante),
+            joinedload(Incidencia.auto)
+        ).filter(Incidencia.id == incidencia_id).first()
+        
+        if not incidencia:
+            raise HTTPException(status_code=404, detail="Incidencia no encontrada")
+
+        persona_afectada = incidencia.persona_afectada
+        reportante = incidencia.reportante
+        auto = incidencia.auto
+        
+        if not persona_afectada or not auto or not reportante:
+            raise HTTPException(status_code=404, detail="Datos relacionados no encontrados")
+
+        incidencia.estatus = estatus
+        
+        if estatus == "Aprobada":
+            persona_afectada.noIncidencias += 1
+            
+            if persona_afectada.noIncidencias >= 3:
+                persona_afectada.estatus = "Bloqueado"
+            
+            db.commit()
+            
+            try:
+                enviar_correo_persona_afectada(
+                    nombre=persona_afectada.nombre,
+                    email=persona_afectada.correo,
+                    numero_incidencias=persona_afectada.noIncidencias,
+                    fecha=incidencia.fecha,
+                    hora=incidencia.hora,
+                    descripcion=incidencia.descripcion,
+                    marca=auto.marca,
+                    modelo=auto.modelo,
+                    placa=auto.placa,
+                    incidencia_id=incidencia.id
+                )
+                print(f"Correo enviado a persona afectada: {persona_afectada.correo}")
+            except Exception as e:
+                print(f"Error enviando correo a persona afectada: {e}")
+            
+            try:
+                enviar_correo_reportante(
+                    email_reportante=reportante.correo,
+                    incidencia_id=incidencia.id,
+                    fecha=incidencia.fecha,
+                    hora=incidencia.hora,
+                    descripcion=incidencia.descripcion,
+                    marca=auto.marca,
+                    modelo=auto.modelo,
+                    placa=auto.placa
+                )
+                print(f"Correo enviado al reportante: {reportante.correo}")
+            except Exception as e:
+                print(f"Error enviando correo al reportante: {e}")
+            
+            mensaje = f"Incidencia aprobada. Total de incidencias: {persona_afectada.noIncidencias}"
+            if persona_afectada.estatus == "Bloqueado":
+                mensaje += ". ⚠️ Usuario BLOQUEADO."
+            
+            return {
+                "message": mensaje,
+                "incidencia_id": incidencia.id,
+                "estatus": incidencia.estatus,
+                "persona_afectada": {
+                    "id": persona_afectada.id,
+                    "nombre": persona_afectada.nombre,
+                    "noIncidencias": persona_afectada.noIncidencias,
+                    "estatus": persona_afectada.estatus
+                },
+                "reportante": {
+                    "id": reportante.id,
+                    "nombre": reportante.nombre,
+                    "correo": reportante.correo
                 }
-            )
-        return resultado
+            }
+        
+        elif estatus == "Rechazada":
+            db.commit()
+            
+            try:
+                enviar_correo_incidencia_rechazada(
+                    email_reportante=reportante.correo,
+                    incidencia_id=incidencia.id,
+                    fecha=incidencia.fecha,
+                    hora=incidencia.hora,
+                    descripcion=incidencia.descripcion
+                )
+                print(f"Correo de rechazo enviado al reportante: {reportante.correo}")
+            except Exception as e:
+                print(f"Error enviando correo de rechazo: {e}")
+            
+            return {
+                "message": "Incidencia rechazada. Correo enviado al reportante.",
+                "incidencia_id": incidencia.id,
+                "estatus": incidencia.estatus,
+                "reportante": {
+                    "id": reportante.id,
+                    "nombre": reportante.nombre,
+                    "correo": reportante.correo
+                }
+            }
+        
+        else:
+            db.commit()
+            return {
+                "message": f"Estatus actualizado a: {estatus}",
+                "incidencia_id": incidencia.id,
+                "estatus": incidencia.estatus
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error actualizando incidencia: {str(e)}")
     finally:
         db.close()

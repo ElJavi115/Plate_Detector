@@ -47,7 +47,11 @@ class _AddUserPageState extends State<AddUserPage> {
       final correo = _correoCtrl.text.trim();
 
       final nuevaPersona =
-          await api.addPersona(nombre, edad, numeroControl, correo);
+          await api.agregarPersona(
+            nombre, 
+            edad, 
+            numeroControl,
+            correo);
 
       if (!mounted) return;
 

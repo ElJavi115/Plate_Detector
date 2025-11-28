@@ -2,6 +2,34 @@ from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .config import Base
 
+class Incidencia(Base):
+    __tablename__ = 'incidencias'
+
+    id = Column(Integer, primary_key=True, index=True)
+    descripcion = Column(String, nullable=False)
+    fecha = Column(String, nullable=False)
+    hora = Column(String, nullable=True)
+    imagenes = Column(String, nullable=True) 
+    estatus = Column(String, default="Pendiente") 
+    latitud = Column(String, nullable=True)
+    longitud = Column(String, nullable=True)
+    persona_id = Column(Integer, ForeignKey('personas.id', ondelete = "CASCADE"), nullable=False)
+    reportante_id = Column(Integer, ForeignKey('personas.id', ondelete = "CASCADE"), nullable=False)
+    auto_id = Column(Integer, ForeignKey('autos.id', ondelete = "CASCADE"), nullable=False)
+
+    persona_afectada = relationship(
+        "Persona",
+        foreign_keys=[persona_id], 
+        back_populates="incidencias_afectado"
+    )
+    
+    reportante = relationship(
+        "Persona",
+        foreign_keys=[reportante_id],
+        back_populates="incidencias_reportante"
+    )
+    
+    auto = relationship("Auto", back_populates="incidencias")
 class Persona(Base):
     __tablename__ = 'personas'
 
@@ -13,6 +41,20 @@ class Persona(Base):
     estatus = Column(String, nullable=False, default="Autorizado")
     noIncidencias = Column(Integer, nullable=False, default=0)
     autos = relationship("Auto", back_populates="persona")
+    perfil_id = Column(Integer, ForeignKey('perfiles.id', ondelete="SET NULL"), nullable=True, default=1)
+
+    perfil = relationship("Perfil", back_populates="personas")
+    incidencias_afectado = relationship(
+        "Incidencia",
+        foreign_keys=[Incidencia.persona_id],  
+        back_populates="persona_afectada"
+    )
+
+    incidencias_reportante = relationship(
+        "Incidencia",
+        foreign_keys=[Incidencia.reportante_id],  
+        back_populates="reportante"
+    )
 
 class Auto(Base):
     __tablename__ = 'autos'
@@ -26,19 +68,13 @@ class Auto(Base):
     persona_id = Column(Integer, ForeignKey('personas.id', ondelete = "CASCADE"), nullable=False)
 
     persona = relationship("Persona", back_populates="autos")
+    incidencias = relationship("Incidencia", back_populates="auto")
 
-class Incidencia(Base):
-    __tablename__ = 'incidencias'
+class Perfil(Base):
+    __tablename__ = 'perfiles'
 
     id = Column(Integer, primary_key=True, index=True)
-    descripcion = Column(String, nullable=False)
-    fecha = Column(String, nullable=False)
-    imagenes = Column(String, nullable=True) 
-    persona_id = Column(Integer, ForeignKey('personas.id', ondelete = "CASCADE"), nullable=False)
-    auto_id = Column(Integer, ForeignKey('autos.id', ondelete = "CASCADE"), nullable=False)
+    nombre = Column(String, nullable=False)
+    descripcion = Column(String, nullable=True)
 
-    persona = relationship("Persona", back_populates="incidencias")
-    auto = relationship("Auto", back_populates="incidencias")
-
-Persona.incidencias = relationship("Incidencia", back_populates="persona")
-Auto.incidencias = relationship("Incidencia", back_populates="auto")
+    personas = relationship("Persona", back_populates="perfil")

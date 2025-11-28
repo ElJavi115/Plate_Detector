@@ -1,6 +1,16 @@
 import os 
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
+
+SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
+MAIL_FROM_ADDRESS = os.getenv('MAIL_FROM_ADDRESS')
+
+if SENDGRID_API_KEY is None:
+    raise ValueError("La API Key de SendGrid no está definida en el archivo .env.")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 

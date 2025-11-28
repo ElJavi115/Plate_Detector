@@ -50,7 +50,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       final modelo = _modeloCtrl.text.trim();
       final color = _colorCtrl.text.trim();
 
-      final Auto nuevoAuto = await api.addAuto(
+      final Auto nuevoAuto = await api.agregarAuto(
         marca,
         modelo,
         color,
